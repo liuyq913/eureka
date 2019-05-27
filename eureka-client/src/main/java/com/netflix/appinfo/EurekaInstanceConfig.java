@@ -15,9 +15,9 @@
  */
 package com.netflix.appinfo;
 
-import java.util.Map;
-
 import com.google.inject.ImplementedBy;
+
+import java.util.Map;
 
 /**
  * Configuration information required by the instance to register with Eureka
@@ -119,7 +119,9 @@ public interface EurekaInstanceConfig {
      * Note that the instance could still not take traffic if it implements
      * {@link HealthCheckCallback} and then decides to make itself unavailable.
      * </p>
-     *
+     *租约续约频率，单位：秒。应用不断通过按照该频率发送心跳给 Eureka-Server 以达到续约的作用。
+     * 当 Eureka-Server 超过最大频率未收到续约（心跳），契约失效，进行应用移除。
+     * 应用移除后，其他应用无法从 Eureka-Server 获取该应用。
      * @return time in seconds
      */
     int getLeaseRenewalIntervalInSeconds();
