@@ -35,6 +35,9 @@ class InstanceInfoReplicator implements Runnable {
     private final ScheduledExecutorService scheduler;
     private final AtomicReference<Future> scheduledPeriodicRef;
 
+    /**
+     * 是否开启调度
+     */
     private final AtomicBoolean started;
     private final RateLimiter rateLimiter;
     private final int burstSize;
@@ -62,7 +65,7 @@ class InstanceInfoReplicator implements Runnable {
 
     public void start(int initialDelayMs) {
         if (started.compareAndSet(false, true)) {
-            instanceInfo.setIsDirty();  // for initial register
+            instanceInfo.setIsDirty();  // for initial register 设置 应用实例信息 数据不一致
             Future next = scheduler.schedule(this, initialDelayMs, TimeUnit.SECONDS);
             scheduledPeriodicRef.set(next);
         }
@@ -117,6 +120,7 @@ class InstanceInfoReplicator implements Runnable {
             discoveryClient.refreshInstanceInfo();
 
             Long dirtyTimestamp = instanceInfo.isDirtyWithTime();
+            //判断是否数据不一致，不一致测发起注册
             if (dirtyTimestamp != null) {
                 discoveryClient.register();
                 instanceInfo.unsetIsDirty(dirtyTimestamp);
