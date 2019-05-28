@@ -16,26 +16,20 @@
 
 package com.netflix.discovery.shared.transport.decorator;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.concurrent.atomic.AtomicReference;
-
 import com.netflix.discovery.shared.resolver.ClusterResolver;
 import com.netflix.discovery.shared.resolver.EurekaEndpoint;
-import com.netflix.discovery.shared.transport.EurekaHttpClient;
-import com.netflix.discovery.shared.transport.EurekaHttpClientFactory;
-import com.netflix.discovery.shared.transport.EurekaHttpResponse;
-import com.netflix.discovery.shared.transport.EurekaTransportConfig;
-import com.netflix.discovery.shared.transport.TransportClientFactory;
-import com.netflix.discovery.shared.transport.TransportException;
-import com.netflix.discovery.shared.transport.TransportUtils;
+import com.netflix.discovery.shared.transport.*;
 import com.netflix.servo.annotations.DataSourceType;
 import com.netflix.servo.annotations.Monitor;
 import com.netflix.servo.monitor.Monitors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static com.netflix.discovery.EurekaClientNames.METRIC_TRANSPORT_PREFIX;
 
@@ -98,11 +92,13 @@ public class RetryableEurekaHttpClient extends EurekaHttpClientDecorator {
     protected <R> EurekaHttpResponse<R> execute(RequestExecutor<R> requestExecutor) {
         List<EurekaEndpoint> candidateHosts = null;
         int endpointIdx = 0;
+        //默认重试3次
         for (int retry = 0; retry < numberOfRetries; retry++) {
             EurekaHttpClient currentHttpClient = delegate.get();
             EurekaEndpoint currentEndpoint = null;
             if (currentHttpClient == null) {
                 if (candidateHosts == null) {
+                    //拿到所有的注册中心信息（defaultZone 的信息， 例如 8080,8081,8082,8083）
                     candidateHosts = getHostCandidates();
                     if (candidateHosts.isEmpty()) {
                         throw new TransportException("There is no known eureka server; cluster server list is empty");
@@ -117,6 +113,7 @@ public class RetryableEurekaHttpClient extends EurekaHttpClientDecorator {
             }
 
             try {
+                //注册成功直接返回 ，后续各个节点直接会同步数据
                 EurekaHttpResponse<R> response = requestExecutor.execute(currentHttpClient);
                 if (serverStatusEvaluator.accept(response.getStatusCode(), requestExecutor.getRequestType())) {
                     delegate.set(currentHttpClient);
@@ -132,6 +129,7 @@ public class RetryableEurekaHttpClient extends EurekaHttpClientDecorator {
 
             // Connection error or 5xx from the server that must be retried on another server
             delegate.compareAndSet(currentHttpClient, null);
+            //注册失败的注册中心放到quarantineSet
             if (currentEndpoint != null) {
                 quarantineSet.add(currentEndpoint);
             }
@@ -158,19 +156,29 @@ public class RetryableEurekaHttpClient extends EurekaHttpClientDecorator {
         };
     }
 
+    /**
+     * 过滤down掉的注册中心
+     * @return
+     */
     private List<EurekaEndpoint> getHostCandidates() {
         List<EurekaEndpoint> candidateHosts = clusterResolver.getClusterEndpoints();
         quarantineSet.retainAll(candidateHosts);
 
         // If enough hosts are bad, we have no choice but start over again
+        /**
+         * 根据RetryableClientQuarantineRefreshPercentage参数计算阈值
+         * 该阈值后续会和quarantineSet中保存的不可用的Eureka Server个数
+         * 作比较，从而判断是否返回全量的Eureka Server还是过滤掉不可用的
+         */
         int threshold = (int) (candidateHosts.size() * transportConfig.getRetryableClientQuarantineRefreshPercentage());
         //Prevent threshold is too large
         if (threshold > candidateHosts.size()) {
             threshold = candidateHosts.size();
         }
         if (quarantineSet.isEmpty()) {
-            // no-op
+            // no-op  首次进来返回所有的注册中心列表
         } else if (quarantineSet.size() >= threshold) {
+            //不可以用列表大于阈值 则清空不可以列表
             logger.debug("Clearing quarantined list of size {}", quarantineSet.size());
             quarantineSet.clear();
         } else {

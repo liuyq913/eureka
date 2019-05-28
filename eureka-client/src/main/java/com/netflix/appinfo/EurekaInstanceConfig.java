@@ -138,6 +138,7 @@ public interface EurekaInstanceConfig {
      * temporary network glitches.This value to be set to atleast higher than
      * the value specified in {@link #getLeaseRenewalIntervalInSeconds()}
      * .
+     * 契约过期时间
      * </p>
      *
      * @return value indicating time in seconds.

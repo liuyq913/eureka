@@ -16,16 +16,16 @@
 
 package com.netflix.appinfo;
 
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
 import com.netflix.appinfo.InstanceInfo.InstanceStatus;
 import com.netflix.appinfo.providers.EurekaConfigBasedInstanceInfoProvider;
 import com.netflix.discovery.StatusChangeEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.inject.Inject;
+import javax.inject.Singleton;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The class that initializes information required for registration with
@@ -174,6 +174,7 @@ public class ApplicationInfoManager {
         if (prev != null) {
             for (StatusChangeListener listener : listeners.values()) {
                 try {
+                    //监听器发布通知，例如：调用InstanceInfoReplicator#onDemandUpdate
                     listener.notify(new StatusChangeEvent(prev, next));
                 } catch (Exception e) {
                     logger.warn("failed to notify listener: {}", listener.getId(), e);
@@ -250,14 +251,15 @@ public class ApplicationInfoManager {
         if (leaseInfo == null) {
             return;
         }
-        int currentLeaseDuration = config.getLeaseExpirationDurationInSeconds();
-        int currentLeaseRenewal = config.getLeaseRenewalIntervalInSeconds();
+        int currentLeaseDuration = config.getLeaseExpirationDurationInSeconds(); //租约过期时间
+        int currentLeaseRenewal = config.getLeaseRenewalIntervalInSeconds(); //租约频率
         if (leaseInfo.getDurationInSecs() != currentLeaseDuration || leaseInfo.getRenewalIntervalInSecs() != currentLeaseRenewal) {
             LeaseInfo newLeaseInfo = LeaseInfo.Builder.newBuilder()
                     .setRenewalIntervalInSecs(currentLeaseRenewal)
                     .setDurationInSecs(currentLeaseDuration)
                     .build();
             instanceInfo.setLeaseInfo(newLeaseInfo);
+            //设置脏标记
             instanceInfo.setIsDirty();
         }
     }

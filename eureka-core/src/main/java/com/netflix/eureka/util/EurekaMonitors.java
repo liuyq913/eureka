@@ -16,8 +16,6 @@
 
 package com.netflix.eureka.util;
 
-import java.util.concurrent.atomic.AtomicLong;
-
 import com.netflix.appinfo.AmazonInfo;
 import com.netflix.appinfo.AmazonInfo.MetaDataKey;
 import com.netflix.appinfo.ApplicationInfoManager;
@@ -26,6 +24,8 @@ import com.netflix.appinfo.DataCenterInfo.Name;
 import com.netflix.servo.DefaultMonitorRegistry;
 import com.netflix.servo.annotations.DataSourceType;
 import com.netflix.servo.monitor.Monitors;
+
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * The enum that encapsulates all statistics monitored by Eureka.

@@ -15,15 +15,6 @@
  */
 package com.netflix.appinfo;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Function;
-
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -40,6 +31,10 @@ import com.thoughtworks.xstream.annotations.XStreamAlias;
 import com.thoughtworks.xstream.annotations.XStreamOmitField;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 /**
  * The class that holds information required for registration with
@@ -150,7 +145,7 @@ public class InstanceInfo {
     @Auto
     private volatile Long lastDirtyTimestamp;
     @Auto
-    private volatile ActionType actionType;
+    private volatile ActionType actionType; //
     @Auto
     private volatile String asgName;
     private String version = VERSION_UNKNOWN;
@@ -1169,6 +1164,7 @@ public class InstanceInfo {
         if (this.status != status) {
             InstanceStatus prev = this.status;
             this.status = status;
+            // 设置 应用实例信息 数据一致
             setIsDirty();
             return prev;
         }
@@ -1260,6 +1256,7 @@ public class InstanceInfo {
     /**
      * Unset the dirty flag iff the unsetDirtyTimestamp matches the lastDirtyTimestamp. No-op if
      * lastDirtyTimestamp > unsetDirtyTimestamp
+     * 通过 isInstanceInfoDirty 参数决定是否发起注册。 false不注册  true 表示注册中心和本地的实例不一致，所以需要发起注册
      *
      * @param unsetDirtyTimestamp the expected lastDirtyTimestamp to unset.
      */

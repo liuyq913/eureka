@@ -65,7 +65,8 @@ class InstanceInfoReplicator implements Runnable {
 
     public void start(int initialDelayMs) {
         if (started.compareAndSet(false, true)) {
-            instanceInfo.setIsDirty();  // for initial register 设置 应用实例信息 数据不一致
+            //设置 应用实例信息 数据不一致 首次启动也会注册 || Eureka client 和Eureka Server应用实例不一致的情况下才会注册
+            instanceInfo.setIsDirty();  // for initial register   首次默认最后一次脏实例的时间是当前时间
             Future next = scheduler.schedule(this, initialDelayMs, TimeUnit.SECONDS);
             scheduledPeriodicRef.set(next);
         }
@@ -94,7 +95,7 @@ class InstanceInfoReplicator implements Runnable {
                     @Override
                     public void run() {
                         logger.debug("Executing on-demand update of local InstanceInfo");
-    
+                        //取消任务
                         Future latestPeriodic = scheduledPeriodicRef.get();
                         if (latestPeriodic != null && !latestPeriodic.isDone()) {
                             logger.debug("Canceling the latest scheduled update, it will be rescheduled at the end of on demand update");
@@ -117,12 +118,14 @@ class InstanceInfoReplicator implements Runnable {
 
     public void run() {
         try {
+            //刷新应用实例信息 定时判断InstanceInfo的状态（status）是否发生变化，变化则注册
             discoveryClient.refreshInstanceInfo();
 
             Long dirtyTimestamp = instanceInfo.isDirtyWithTime();
             //判断是否数据不一致，不一致测发起注册
             if (dirtyTimestamp != null) {
                 discoveryClient.register();
+                //设置应用实例信息数据一致
                 instanceInfo.unsetIsDirty(dirtyTimestamp);
             }
         } catch (Throwable t) {

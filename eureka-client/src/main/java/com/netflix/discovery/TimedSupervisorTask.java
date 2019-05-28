@@ -1,14 +1,5 @@
 package com.netflix.discovery;
 
-import java.util.TimerTask;
-import java.util.concurrent.Future;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicLong;
-
 import com.netflix.servo.monitor.Counter;
 import com.netflix.servo.monitor.LongGauge;
 import com.netflix.servo.monitor.MonitorConfig;
@@ -16,10 +7,14 @@ import com.netflix.servo.monitor.Monitors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.TimerTask;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicLong;
+
 /**
  * A supervisor task that schedules subtasks while enforce a timeout.
  * Wrapped subtasks must be thread safe.
- *
+ * 监管定时任务的任务， 心跳  获取服务列表等任务就是在这里被监管的
  * @author David Qiang Liu
  */
 public class TimedSupervisorTask extends TimerTask {
@@ -31,12 +26,31 @@ public class TimedSupervisorTask extends TimerTask {
     private final Counter throwableCounter;
     private final LongGauge threadPoolLevelGauge;
 
+    /**
+     * 定时任务
+     */
     private final ScheduledExecutorService scheduler;
+    /**
+     * 执行字子任务线程池
+     */
     private final ThreadPoolExecutor executor;
+    /**
+     * 子任务超时时间
+     */
     private final long timeoutMillis;
+    /**
+     * 子任务
+     */
     private final Runnable task;
-
+    /**
+     * 当前任子务执行频率
+     */
     private final AtomicLong delay;
+    /**
+     * 最大子任务执行频率
+     *
+     * 子任务执行超时情况下使用
+     */
     private final long maxDelay;
 
     public TimedSupervisorTask(String name, ScheduledExecutorService scheduler, ThreadPoolExecutor executor,
@@ -63,14 +77,16 @@ public class TimedSupervisorTask extends TimerTask {
         try {
             future = executor.submit(task);
             threadPoolLevelGauge.set((long) executor.getActiveCount());
+            //等待任务执行完成或超时
             future.get(timeoutMillis, TimeUnit.MILLISECONDS);  // block until done or timeout
+            //设置下一次任务执行频率
             delay.set(timeoutMillis);
             threadPoolLevelGauge.set((long) executor.getActiveCount());
             successCounter.increment();
         } catch (TimeoutException e) {
             logger.warn("task supervisor timed out", e);
             timeoutCounter.increment();
-
+            //超时，设置下一次任务执行频率
             long currentDelay = delay.get();
             long newDelay = Math.min(maxDelay, currentDelay * 2);
             delay.compareAndSet(currentDelay, newDelay);
@@ -92,12 +108,14 @@ public class TimedSupervisorTask extends TimerTask {
 
             throwableCounter.increment();
         } finally {
+            //取消未完成任务
             if (future != null) {
                 future.cancel(true);
             }
 
+            //只要scheduler没有停止则就会一直执行，所以就有了心跳的连续性
             if (!scheduler.isShutdown()) {
-                scheduler.schedule(this, delay.get(), TimeUnit.MILLISECONDS);
+                scheduler.schedule(this, delay.get(), TimeUnit.MILLISECONDS); //task执行正常 ，TimedSupervisorTask又将自己提交到scheduler 执行
             }
         }
     }

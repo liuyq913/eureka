@@ -38,13 +38,13 @@ public class Lease<T> {
 
     public static final int DEFAULT_DURATION_IN_SECS = 90;
 
-    private T holder;
-    private long evictionTimestamp;
-    private long registrationTimestamp;
-    private long serviceUpTimestamp;
+    private T holder; //租约的持有者
+    private long evictionTimestamp; //取消注册时间戳
+    private long registrationTimestamp; //注册时间
+    private long serviceUpTimestamp; //开始服务时间
     // Make it volatile so that the expiration task would see this quicker
-    private volatile long lastUpdateTimestamp;
-    private long duration;
+    private volatile long lastUpdateTimestamp; // 最后更新时间戳
+    private long duration; // 租约持续时长，单位：毫秒
 
     public Lease(T r, int durationInSecs) {
         holder = r;
