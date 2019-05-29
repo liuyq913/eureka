@@ -110,9 +110,10 @@ public class InstanceResource {
             logger.warn("Not Found (Renew): {} - {}", app.getName(), id);
             return Response.status(Status.NOT_FOUND).build();
         }
-        // Check if we need to sync based on dirty time stamp, the client
+        // Check if we need to sync based on dirty time stamp, the client   续约成功之后校验时间是否一致
         // instance might have changed some value
         Response response;
+        // 比较eureka-client 传过来的lastDirtyTimestamp  与 eurkeka-Server中的lastDirtyTimestamp
         if (lastDirtyTimestamp != null && serverConfig.shouldSyncWhenTimestampDiffers()) {
             response = this.validateDirtyTimestamp(Long.valueOf(lastDirtyTimestamp), isFromReplicaNode);
             // Store the overridden status since the validation found out the node that replicates wins
@@ -267,6 +268,7 @@ public class InstanceResource {
      *            replicated from other nodes.
      * @return response indicating whether the operation was a success or
      *         failure.
+     *       下线
      */
     @DELETE
     public Response cancelLease(
@@ -291,6 +293,7 @@ public class InstanceResource {
 
     private Response validateDirtyTimestamp(Long lastDirtyTimestamp,
                                             boolean isReplication) {
+        // eureke-server中的 实例
         InstanceInfo appInfo = registry.getInstanceByAppAndId(app.getName(), id, false);
         if (appInfo != null) {
             if ((lastDirtyTimestamp != null) && (!lastDirtyTimestamp.equals(appInfo.getLastDirtyTimestamp()))) {

@@ -77,7 +77,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
 
     // CircularQueues here for debugging/statistics purposes only
     private final CircularQueue<Pair<Long, String>> recentRegisteredQueue;
-    private final CircularQueue<Pair<Long, String>> recentCanceledQueue;
+    private final CircularQueue<Pair<Long, String>> recentCanceledQueue; //最近取消队列
     //最近租约变更记录队列
     private ConcurrentLinkedQueue<RecentlyChangedItem> recentlyChangedQueue = new ConcurrentLinkedQueue<RecentlyChangedItem>();
 
@@ -93,8 +93,8 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
     private final AtomicReference<EvictionTask> evictionTaskRef = new AtomicReference<EvictionTask>();
 
     protected String[] allKnownRemoteRegions = EMPTY_STR_ARRAY;
-    protected volatile int numberOfRenewsPerMinThreshold;
-    protected volatile int expectedNumberOfClientsSendingRenews;
+    protected volatile int numberOfRenewsPerMinThreshold;  //期望最小每分钟租约次数
+    protected volatile int expectedNumberOfClientsSendingRenews; //期望最大每分钟续租次数
 
     protected final EurekaServerConfig serverConfig;
     protected final EurekaClientConfig clientConfig;
@@ -294,19 +294,20 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
      * cancel request is replicated to the peers. This is however not desired for expires which would be counted
      * in the remote peers as valid cancellations, so self preservation mode would not kick-in.
      */
-    protected boolean internalCancel(String appName, String id, boolean isReplication) {
+    protected boolean internalCancel(String appName, String id, boolean isReplication) {  //取消
         try {
             read.lock();
             CANCEL.increment(isReplication);
             Map<String, Lease<InstanceInfo>> gMap = registry.get(appName);
             Lease<InstanceInfo> leaseToCancel = null;
+            //删除
             if (gMap != null) {
                 leaseToCancel = gMap.remove(id);
             }
             synchronized (recentCanceledQueue) {
                 recentCanceledQueue.add(new Pair<Long, String>(System.currentTimeMillis(), appName + "(" + id + ")"));
             }
-            InstanceStatus instanceStatus = overriddenInstanceStatusMap.remove(id);
+            InstanceStatus instanceStatus = overriddenInstanceStatusMap.remove(id);// 移除 应用实例覆盖状态映射
             if (instanceStatus != null) {
                 logger.debug("Removed instance id {} from the overridden map which has value {}", id, instanceStatus.name());
             }
@@ -315,10 +316,12 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
                 logger.warn("DS: Registry: cancel failed because Lease is not registered for: {}/{}", appName, id);
                 return false;
             } else {
+                // 设置 租约的取消注册时间戳
                 leaseToCancel.cancel();
                 InstanceInfo instanceInfo = leaseToCancel.getHolder();
                 String vip = null;
                 String svip = null;
+                //更改实例状态
                 if (instanceInfo != null) {
                     instanceInfo.setActionType(ActionType.DELETED);
                     recentlyChangedQueue.add(new RecentlyChangedItem(leaseToCancel));
@@ -342,13 +345,14 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
      * @see com.netflix.eureka.lease.LeaseManager#renew(java.lang.String, java.lang.String, boolean)
      */
     public boolean renew(String appName, String id, boolean isReplication) {
+        //增加租约次数 到监控
         RENEW.increment(isReplication);
         Map<String, Lease<InstanceInfo>> gMap = registry.get(appName);
         Lease<InstanceInfo> leaseToRenew = null;
         if (gMap != null) {
             leaseToRenew = gMap.get(id);
         }
-        if (leaseToRenew == null) {
+        if (leaseToRenew == null) { //续约失败  ，会触发eureka-client重新注册
             RENEW_NOT_FOUND.increment(isReplication);
             logger.warn("DS: Registry: lease doesn't exist, registering resource: {} - {}", appName, id);
             return false;
@@ -375,6 +379,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
                 }
             }
             renewsLastMin.increment();
+            //更新最后更新时间（租约）
             leaseToRenew.renew();
             return true;
         }
@@ -579,11 +584,12 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
     public void evict(long additionalLeaseMs) {
         logger.debug("Running the evict task");
 
-        if (!isLeaseExpirationEnabled()) {
+        if (!isLeaseExpirationEnabled()) { //是否租约过期
             logger.debug("DS: lease expiration is currently disabled.");
             return;
         }
 
+        //过期租约逻辑
         // We collect first all expired items, to evict them in random order. For large eviction sets,
         // if we do not that, we might wipe out whole apps before self preservation kicks in. By randomizing it,
         // the impact should be evenly distributed across all applications.
@@ -594,7 +600,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
                 for (Entry<String, Lease<InstanceInfo>> leaseEntry : leaseMap.entrySet()) {
                     Lease<InstanceInfo> lease = leaseEntry.getValue();
                     if (lease.isExpired(additionalLeaseMs) && lease.getHolder() != null) {
-                        expiredLeases.add(lease);
+                        expiredLeases.add(lease); //过期列表
                     }
                 }
             }
@@ -602,11 +608,11 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
 
         // To compensate for GC pauses or drifting local time, we need to use current registry size as a base for
         // triggering self-preservation. Without that we would wipe out full registry.
-        int registrySize = (int) getLocalRegistrySize();
-        int registrySizeThreshold = (int) (registrySize * serverConfig.getRenewalPercentThreshold());
+        int registrySize = (int) getLocalRegistrySize(); //本地注册实例个数
+        int registrySizeThreshold = (int) (registrySize * serverConfig.getRenewalPercentThreshold()); //续租百分比 默认0.85  当低于这个值，系统会开启自我保护机制
         int evictionLimit = registrySize - registrySizeThreshold;
 
-        int toEvict = Math.min(expiredLeases.size(), evictionLimit);
+        int toEvict = Math.min(expiredLeases.size(), evictionLimit); //取过期列表  和  当前租约事例个数*0.85 的最小值
         if (toEvict > 0) {
             logger.info("Evicting {} items (expired={}, evictionLimit={})", toEvict, expiredLeases.size(), evictionLimit);
 

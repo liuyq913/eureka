@@ -38,7 +38,7 @@ public class Lease<T> {
 
     public static final int DEFAULT_DURATION_IN_SECS = 90;
 
-    private T holder; //租约的持有者
+    private T holder; //租约的持有者 也就是实例对象
     private long evictionTimestamp; //取消注册时间戳
     private long registrationTimestamp; //注册时间
     private long serviceUpTimestamp; //开始服务时间
