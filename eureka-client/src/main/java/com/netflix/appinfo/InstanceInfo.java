@@ -139,7 +139,7 @@ public class InstanceInfo {
     @Auto
     private volatile Boolean isCoordinatingDiscoveryServer = Boolean.FALSE;
     @XStreamAlias("metadata")
-    private volatile Map<String, String> metadata;
+    private volatile Map<String, String> metadata;  //元数据
     @Auto
     private volatile Long lastUpdatedTimestamp;
     @Auto

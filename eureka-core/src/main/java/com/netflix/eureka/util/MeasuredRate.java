@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class MeasuredRate {
     private static final Logger logger = LoggerFactory.getLogger(MeasuredRate.class);
     /**
-     * 上一个间隔次数
+     * 上一个间隔次数 也就是上一分钟统计心跳的次数
      */
     private final AtomicLong lastBucket = new AtomicLong(0);
     /**

@@ -469,7 +469,7 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
         if (!isSelfPreservationModeEnabled()) { //自动保护模式开关( eureka.enableSelfPreservation = true
             // The self preservation mode is disabled, hence allowing the instances to expire.
             return true; //自我保护模式被禁用，因此允许实例过期。
-        }
+        }    //上一分钟统计心跳次数  >  最小期望数
         return numberOfRenewsPerMinThreshold > 0 && getNumOfRenewsInLastMin() > numberOfRenewsPerMinThreshold;
     }
 

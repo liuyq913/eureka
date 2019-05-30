@@ -93,7 +93,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
     private final AtomicReference<EvictionTask> evictionTaskRef = new AtomicReference<EvictionTask>();
 
     protected String[] allKnownRemoteRegions = EMPTY_STR_ARRAY;
-    protected volatile int numberOfRenewsPerMinThreshold;  //期望最小每分钟租约次数
+    protected volatile int numberOfRenewsPerMinThreshold;  //期望最小每分钟租约次数（触发自我保护的阈值）  = 服务总数（包含注册中心的数） * 2 * 0.85   如果实际的续约数小于了自我保护阀值，则开启自我保护。
     protected volatile int expectedNumberOfClientsSendingRenews; //期望最大每分钟续租次数
 
     protected final EurekaServerConfig serverConfig;
