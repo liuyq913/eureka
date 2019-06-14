@@ -102,6 +102,8 @@ public class InstanceResource {
             @QueryParam("overriddenstatus") String overriddenStatus,
             @QueryParam("status") String status,
             @QueryParam("lastDirtyTimestamp") String lastDirtyTimestamp) {
+        //isReplication表示当前请求是接受EurkeaClient端发过来的，还是其他EurkeaServer发送过来同步消息的请求
+        //isReplication == true表示是其他EurkeaServer发送过来的同步请求
         boolean isFromReplicaNode = "true".equals(isReplication);
         boolean isSuccess = registry.renew(app.getName(), id, isFromReplicaNode);
 
@@ -150,6 +152,14 @@ public class InstanceResource {
      * @return response indicating whether the operation was a success or
      *         failure.
      */
+    /**
+     * 这里的覆盖状态的作用是将注册中的实例状态改掉，然而EurekaClient 服务提供者的状态并没有变
+     * 然后EurkaClient的 消费者，拿到注册信息的是，发现提供者的服务down,从而过滤掉服务提供者。
+     * @param newStatus
+     * @param isReplication
+     * @param lastDirtyTimestamp
+     * @return
+     */
     @PUT
     @Path("status")
     public Response statusUpdate(
@@ -157,10 +167,12 @@ public class InstanceResource {
             @HeaderParam(PeerEurekaNode.HEADER_REPLICATION) String isReplication,
             @QueryParam("lastDirtyTimestamp") String lastDirtyTimestamp) {
         try {
+            //实例不存在
             if (registry.getInstanceByAppAndId(app.getName(), id) == null) {
                 logger.warn("Instance not found: {}/{}", app.getName(), id);
                 return Response.status(Status.NOT_FOUND).build();
             }
+            //覆盖更新状态
             boolean isSuccess = registry.statusUpdate(app.getName(), id,
                     InstanceStatus.valueOf(newStatus), lastDirtyTimestamp,
                     "true".equals(isReplication));
@@ -190,6 +202,7 @@ public class InstanceResource {
      *            last timestamp when this instance information was updated.
      * @return response indicating whether the operation was a success or
      *         failure.
+     *  删除实例覆盖状态接口
      */
     @DELETE
     @Path("status")
@@ -198,6 +211,7 @@ public class InstanceResource {
             @QueryParam("value") String newStatusValue,
             @QueryParam("lastDirtyTimestamp") String lastDirtyTimestamp) {
         try {
+            //实例不存在
             if (registry.getInstanceByAppAndId(app.getName(), id) == null) {
                 logger.warn("Instance not found: {}/{}", app.getName(), id);
                 return Response.status(Status.NOT_FOUND).build();
@@ -299,12 +313,13 @@ public class InstanceResource {
             if ((lastDirtyTimestamp != null) && (!lastDirtyTimestamp.equals(appInfo.getLastDirtyTimestamp()))) {
                 Object[] args = {id, appInfo.getLastDirtyTimestamp(), lastDirtyTimestamp, isReplication};
 
+                //eureka-client请求过来的修改时间大于 注册中心的修改时间  则表明client实例与注册中心的实例数据不一致 这返回404
                 if (lastDirtyTimestamp > appInfo.getLastDirtyTimestamp()) {
                     logger.debug(
                             "Time to sync, since the last dirty timestamp differs -"
                                     + " ReplicationInstance id : {},Registry : {} Incoming: {} Replication: {}",
                             args);
-                    return Response.status(Status.NOT_FOUND).build();
+                    return Response.status(Status.NOT_FOUND).build(); //返回404又重新触发注册，同步注册中心与Client的数据
                 } else if (appInfo.getLastDirtyTimestamp() > lastDirtyTimestamp) {
                     // In the case of replication, send the current instance info in the registry for the
                     // replicating node to sync itself with this one.

@@ -134,7 +134,7 @@ public class InstanceInfo {
     private volatile InstanceStatus status = InstanceStatus.UP;
     private volatile InstanceStatus overriddenStatus = InstanceStatus.UNKNOWN;
     @XStreamOmitField
-    private volatile boolean isInstanceInfoDirty = false;
+    private volatile boolean isInstanceInfoDirty = false; //eureka client和eureka server 数据是否一致标识， true表示不一致
     private volatile LeaseInfo leaseInfo;
     @Auto
     private volatile Boolean isCoordinatingDiscoveryServer = Boolean.FALSE;

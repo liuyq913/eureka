@@ -1,30 +1,25 @@
 package com.netflix.eureka.cluster;
 
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
-
 import com.netflix.appinfo.ApplicationInfoManager;
 import com.netflix.appinfo.InstanceInfo;
 import com.netflix.discovery.EurekaClientConfig;
 import com.netflix.discovery.endpoint.EndpointUtils;
-import com.netflix.discovery.shared.Application;
 import com.netflix.eureka.EurekaServerConfig;
 import com.netflix.eureka.registry.PeerAwareInstanceRegistry;
 import com.netflix.eureka.resources.ServerCodecs;
 import com.netflix.eureka.transport.JerseyReplicationClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.inject.Inject;
+import javax.inject.Singleton;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.*;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Helper class to manage lifecycle of a collection of {@link PeerEurekaNode}s.
@@ -36,13 +31,28 @@ public class PeerEurekaNodes {
 
     private static final Logger logger = LoggerFactory.getLogger(PeerEurekaNodes.class);
 
+    /**
+     * 应用实例注册表
+     */
     protected final PeerAwareInstanceRegistry registry;
     protected final EurekaServerConfig serverConfig;
     protected final EurekaClientConfig clientConfig;
+    /**
+     * Eureka-Server 编解码
+     */
     protected final ServerCodecs serverCodecs;
+    /**
+     * 应用实例信息管理器
+     */
     private final ApplicationInfoManager applicationInfoManager;
 
+    /**
+     * 集群节点配置
+     */
     private volatile List<PeerEurekaNode> peerEurekaNodes = Collections.emptyList();
+    /**
+     * Eureka-Server 服务地址数组
+     */
     private volatile Set<String> peerEurekaNodeUrls = Collections.emptySet();
 
     private ScheduledExecutorService taskExecutor;
@@ -85,7 +95,9 @@ public class PeerEurekaNodes {
                 }
         );
         try {
+            //初始化 集群节点信息
             updatePeerEurekaNodes(resolvePeerUrls());
+            //固定时间更新集群节点信息
             Runnable peersUpdateTask = new Runnable() {
                 @Override
                 public void run() {
@@ -97,6 +109,12 @@ public class PeerEurekaNodes {
 
                 }
             };
+            /**
+             *  scheduleWithFixedDelay(Runnable command, long initialDelay, long delay, TimeUnit unit)
+             *    initialDelay 第一次执行的延迟时间
+             *    delay 第一次以后的延迟时间
+             *
+             */
             taskExecutor.scheduleWithFixedDelay(
                     peersUpdateTask,
                     serverConfig.getPeerEurekaNodesUpdateIntervalMs(),
@@ -129,6 +147,7 @@ public class PeerEurekaNodes {
      * @return peer URLs with node's own URL filtered out
      */
     protected List<String> resolvePeerUrls() {
+        //获取到Eurka-Server 集群服务地址数组
         InstanceInfo myInfo = applicationInfoManager.getInfo();
         String zone = InstanceInfo.getZone(clientConfig.getAvailabilityZones(clientConfig.getRegion()), myInfo);
         List<String> replicaUrls = EndpointUtils
@@ -136,6 +155,7 @@ public class PeerEurekaNodes {
 
         int idx = 0;
         while (idx < replicaUrls.size()) {
+            //剔除自己的，以免向自己同步
             if (isThisMyUrl(replicaUrls.get(idx))) {
                 replicaUrls.remove(idx);
             } else {
@@ -150,6 +170,11 @@ public class PeerEurekaNodes {
      * create new ones.
      *
      * @param newPeerUrls peer node URLs; this collection should have local node's URL filtered out
+     *  更新节点信息    猜测：newPeerUrls 为固定节点 （1，2,3）   peerEurekaNodeUrls（1,2,4）为每次动态变化的节点  那么，新增的节点是peerEurekaNodeUrls.remote（newPeerUrls） = 4
+     *                    删除的节点就是  newPeerUrls。remote（peerEurekaNodeUrls）  = 3
+     *
+     *  添加新增的集群节点
+     *  关闭删除的集群节点
      */
     protected void updatePeerEurekaNodes(List<String> newPeerUrls) {
         if (newPeerUrls.isEmpty()) {
@@ -157,8 +182,10 @@ public class PeerEurekaNodes {
             return;
         }
 
+        //计算新增的节点   可以猜测 当启动eurke-Server的时候peerEurekaNodeUrls == null,   这时候将所有 配置的节点都新增上去。删除的时候也同理
         Set<String> toShutdown = new HashSet<>(peerEurekaNodeUrls);
         toShutdown.removeAll(newPeerUrls);
+        //计算删除的节点
         Set<String> toAdd = new HashSet<>(newPeerUrls);
         toAdd.removeAll(peerEurekaNodeUrls);
 
@@ -175,7 +202,7 @@ public class PeerEurekaNodes {
             while (i < newNodeList.size()) {
                 PeerEurekaNode eurekaNode = newNodeList.get(i);
                 if (toShutdown.contains(eurekaNode.getServiceUrl())) {
-                    newNodeList.remove(i);
+                    newNodeList.remove(i); //删除节点
                     eurekaNode.shutDown();
                 } else {
                     i++;
@@ -191,10 +218,15 @@ public class PeerEurekaNodes {
             }
         }
 
-        this.peerEurekaNodes = newNodeList;
+        this.peerEurekaNodes = newNodeList; //动态变化
         this.peerEurekaNodeUrls = new HashSet<>(newPeerUrls);
     }
 
+    /**
+     * 增加新增的集群节点
+     * @param peerEurekaNodeUrl
+     * @return
+     */
     protected PeerEurekaNode createPeerEurekaNode(String peerEurekaNodeUrl) {
         HttpReplicationClient replicationClient = JerseyReplicationClient.createReplicationClient(serverConfig, serverCodecs, peerEurekaNodeUrl);
         String targetHost = hostFromUrl(peerEurekaNodeUrl);

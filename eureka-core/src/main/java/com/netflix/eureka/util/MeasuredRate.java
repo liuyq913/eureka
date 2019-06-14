@@ -34,7 +34,7 @@ public class MeasuredRate {
      */
     private final AtomicLong lastBucket = new AtomicLong(0);
     /**
-     * 当前间隔次数
+     * 当前心跳次数 /每分钟清零一次 ，续约则+1
      */
     private final AtomicLong currentBucket = new AtomicLong(0);
     /**

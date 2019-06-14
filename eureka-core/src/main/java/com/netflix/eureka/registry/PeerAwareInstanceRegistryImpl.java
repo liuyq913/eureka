@@ -180,7 +180,7 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
                                updateRenewalThreshold();
                            }
                        }, serverConfig.getRenewalThresholdUpdateIntervalMs(),
-                serverConfig.getRenewalThresholdUpdateIntervalMs());
+                serverConfig.getRenewalThresholdUpdateIntervalMs());  //renewalThresholdUpdateIntervalMs 默认15分钟
     }
 
     /**
@@ -405,8 +405,8 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
      * java.lang.String, long, boolean)
      */
     public boolean renew(final String appName, final String id, final boolean isReplication) {
-        if (super.renew(appName, id, isReplication)) { //续租
-            //Eureka-Server 复制
+        if (super.renew(appName, id, isReplication)) { //续租     isReplication是否是同步（EureakeServer发送过来的同步信息）
+            //Eureka-Server   如果是同步请求则直接返回, 如果是client发送过来的续租请求则往其他的EureakServer节点同步续约信息
             replicateToPeers(Action.Heartbeat, appName, id, null, null, isReplication);
             return true;
         }
@@ -469,7 +469,9 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
         if (!isSelfPreservationModeEnabled()) { //自动保护模式开关( eureka.enableSelfPreservation = true
             // The self preservation mode is disabled, hence allowing the instances to expire.
             return true; //自我保护模式被禁用，因此允许实例过期。
-        }    //上一分钟统计心跳次数  >  最小期望数
+        }
+
+        //启用了自动保护机制，并且前一分钟的心跳总数 >  最小期望数 走剔除逻辑    并且前一分钟的心跳总数 < 最小期望数 不剔除
         return numberOfRenewsPerMinThreshold > 0 && getNumOfRenewsInLastMin() > numberOfRenewsPerMinThreshold;
     }
 
@@ -513,7 +515,7 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
             for (Application app : apps.getRegisteredApplications()) {
                 for (InstanceInfo instance : app.getInstances()) {
                     if (this.isRegisterable(instance)) {
-                        ++count;
+                        ++count; //实例数
                     }
                 }
             }

@@ -20,6 +20,9 @@ import java.util.concurrent.atomic.AtomicLong;
 public class TimedSupervisorTask extends TimerTask {
     private static final Logger logger = LoggerFactory.getLogger(TimedSupervisorTask.class);
 
+    /**
+     * 监控的值
+     */
     private final Counter successCounter;
     private final Counter timeoutCounter;
     private final Counter rejectedCounter;
