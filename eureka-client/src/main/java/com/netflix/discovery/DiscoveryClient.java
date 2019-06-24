@@ -1423,7 +1423,7 @@ public class DiscoveryClient implements EurekaClient {
             // This makes sure that a dynamic change to remote regions to fetch is honored.
             String latestRemoteRegions = clientConfig.fetchRegistryForRemoteRegions();
             if (null != latestRemoteRegions) {
-                String currentRemoteRegions = remoteRegionsToFetch.get();
+                String currentRemoteRegions = remoteRegionsToFetch.get(); //当前 regions
                 if (!latestRemoteRegions.equals(currentRemoteRegions)) {
                     // Both remoteRegionsToFetch and AzToRegionMapper.regionsToFetch need to be in sync
                     synchronized (instanceRegionChecker.getAzToRegionMapper()) {
